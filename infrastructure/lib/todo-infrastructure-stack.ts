@@ -56,7 +56,7 @@ export class TodoInfrastructureStack extends cdk.Stack {
     // Lambda functions
     const createTodoFunction = new lambda.Function(this, 'CreateTodoFunction', {
       runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'createTodo.handler',
+      handler: 'handlers/createTodo.handler',
       code: lambda.Code.fromAsset('../backend/dist'),
       environment: {
         TODO_TABLE_NAME: todoTable.tableName,
@@ -68,7 +68,7 @@ export class TodoInfrastructureStack extends cdk.Stack {
 
     const getTodosFunction = new lambda.Function(this, 'GetTodosFunction', {
       runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'getTodos.handler',
+      handler: 'handlers/getTodos.handler',
       code: lambda.Code.fromAsset('../backend/dist'),
       environment: {
         TODO_TABLE_NAME: todoTable.tableName,
@@ -80,7 +80,7 @@ export class TodoInfrastructureStack extends cdk.Stack {
 
     const getTodoFunction = new lambda.Function(this, 'GetTodoFunction', {
       runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'getTodo.handler',
+      handler: 'handlers/getTodo.handler',
       code: lambda.Code.fromAsset('../backend/dist'),
       environment: {
         TODO_TABLE_NAME: todoTable.tableName,
@@ -92,7 +92,7 @@ export class TodoInfrastructureStack extends cdk.Stack {
 
     const updateTodoFunction = new lambda.Function(this, 'UpdateTodoFunction', {
       runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'updateTodo.handler',
+      handler: 'handlers/updateTodo.handler',
       code: lambda.Code.fromAsset('../backend/dist'),
       environment: {
         TODO_TABLE_NAME: todoTable.tableName,
@@ -104,7 +104,7 @@ export class TodoInfrastructureStack extends cdk.Stack {
 
     const deleteTodoFunction = new lambda.Function(this, 'DeleteTodoFunction', {
       runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'deleteTodo.handler',
+      handler: 'handlers/deleteTodo.handler',
       code: lambda.Code.fromAsset('../backend/dist'),
       environment: {
         TODO_TABLE_NAME: todoTable.tableName,
@@ -116,7 +116,7 @@ export class TodoInfrastructureStack extends cdk.Stack {
 
     const healthCheckFunction = new lambda.Function(this, 'HealthCheckFunction', {
       runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'healthCheck.handler',
+      handler: 'handlers/healthCheck.handler',
       code: lambda.Code.fromAsset('../backend/dist'),
       environment: {
         TODO_TABLE_NAME: todoTable.tableName,
