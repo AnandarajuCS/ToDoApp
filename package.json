@@ -1,0 +1,26 @@
+{
+  "name": "todo-app",
+  "version": "1.0.0",
+  "description": "Production-ready Todo list application with AWS serverless backend",
+  "main": "index.js",
+  "scripts": {
+    "build": "npm run build:frontend && npm run build:backend",
+    "build:frontend": "cd frontend && npm run build",
+    "build:backend": "cd backend && npm run build",
+    "deploy": "cd infrastructure && npm run deploy",
+    "destroy": "cd infrastructure && npm run destroy",
+    "test": "npm run test:frontend && npm run test:backend",
+    "test:frontend": "cd frontend && npm test",
+    "test:backend": "cd backend && npm test",
+    "dev:frontend": "cd frontend && npm start",
+    "dev:backend": "cd backend && npm run dev"
+  },
+  "keywords": ["todo", "aws", "serverless", "react", "lambda", "dynamodb"],
+  "author": "",
+  "license": "MIT",
+  "workspaces": [
+    "frontend",
+    "backend",
+    "infrastructure"
+  ]
+}
