@@ -8,7 +8,7 @@ class TodoApiService {
   constructor() {
     // In production, this would be set via environment variables
     // For now, we'll use a placeholder that will be replaced during deployment
-    this.baseUrl = process.env.REACT_APP_API_URL || 'https://api.placeholder.com/prod';
+    this.baseUrl = process.env.REACT_APP_API_URL || 'https://f0nr9zgwv0.execute-api.us-east-1.amazonaws.com/prod';
   }
 
   private async makeRequest<T>(

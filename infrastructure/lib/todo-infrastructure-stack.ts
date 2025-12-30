@@ -9,6 +9,9 @@ import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
+import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as route53targets from 'aws-cdk-lib/aws-route53-targets';
 import { Construct } from 'constructs';
 
 export class TodoInfrastructureStack extends cdk.Stack {
@@ -187,8 +190,22 @@ export class TodoInfrastructureStack extends cdk.Stack {
       description: 'OAC for Todo App S3 bucket',
     });
 
+    // Custom domain configuration
+    const domainName = 'todo.test.anandsjo.com';
+    const hostedZone = route53.HostedZone.fromLookup(this, 'HostedZone', {
+      domainName: 'test.anandsjo.com',
+    });
+
+    // SSL Certificate for custom domain (must be in us-east-1 for CloudFront)
+    const certificate = new certificatemanager.Certificate(this, 'TodoCertificate', {
+      domainName: domainName,
+      validation: certificatemanager.CertificateValidation.fromDns(hostedZone),
+    });
+
     // CloudFront Distribution
     const distribution = new cloudfront.Distribution(this, 'TodoDistribution', {
+      domainNames: [domainName],
+      certificate: certificate,
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(websiteBucket, {
           originAccessControl,
@@ -247,6 +264,13 @@ export class TodoInfrastructureStack extends cdk.Stack {
       });
     });
 
+    // Route53 record to point custom domain to CloudFront
+    new route53.ARecord(this, 'TodoAliasRecord', {
+      zone: hostedZone,
+      recordName: 'todo',
+      target: route53.RecordTarget.fromAlias(new route53targets.CloudFrontTarget(distribution)),
+    });
+
     // Outputs
     new cdk.CfnOutput(this, 'ApiUrl', {
       value: api.url,
@@ -256,6 +280,11 @@ export class TodoInfrastructureStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'WebsiteUrl', {
       value: `https://${distribution.distributionDomainName}`,
       description: 'CloudFront Distribution URL',
+    });
+
+    new cdk.CfnOutput(this, 'CustomDomainUrl', {
+      value: `https://${domainName}`,
+      description: 'Custom Domain URL',
     });
 
     new cdk.CfnOutput(this, 'TodoTableName', {
