@@ -41,7 +41,7 @@ cd ..
 
 echo "🔨 Building frontend..."
 cd frontend
-npm run build
+GENERATE_SOURCEMAP=false npm run build
 cd ..
 
 echo "🔨 Building infrastructure..."
