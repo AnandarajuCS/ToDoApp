@@ -29,3 +29,15 @@ export class TodoValidationException extends Error {
     this.name = 'TodoValidationException';
   }
 }
+export interface PaginatedRequest {
+  limit?: number;
+  nextToken?: string;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  nextToken?: string;
+  count: number;
+  limit: number;
+  hasMore: boolean;
+}
