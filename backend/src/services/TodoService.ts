@@ -32,7 +32,8 @@ export class TodoService {
       title: request.title.trim(),
       completed: false,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
+      version: 0
     };
 
     try {
@@ -123,6 +124,12 @@ export class TodoService {
     updateExpression.push('updatedAt = :updatedAt');
     expressionAttributeValues[':updatedAt'] = now;
 
+    // Increment version for optimistic locking
+    updateExpression.push('#version = #version + :inc');
+    expressionAttributeNames['#version'] = 'version';
+    expressionAttributeValues[':inc'] = 1;
+    expressionAttributeValues[':currentVersion'] = existingTodo.version || 0;
+
     try {
       const result = await this.docClient.send(new UpdateCommand({
         TableName: this.tableName,
@@ -130,6 +137,8 @@ export class TodoService {
         UpdateExpression: `SET ${updateExpression.join(', ')}`,
         ExpressionAttributeValues: expressionAttributeValues,
         ExpressionAttributeNames: Object.keys(expressionAttributeNames).length > 0 ? expressionAttributeNames : undefined,
+        // Optimistic locking: only update if version matches expected value
+        ConditionExpression: 'attribute_exists(id) AND #version = :currentVersion',
         ReturnValues: 'ALL_NEW'
       }));
 

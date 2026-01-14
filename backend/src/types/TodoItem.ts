@@ -4,6 +4,7 @@ export interface TodoItem {
   completed: boolean;   // Completion status
   createdAt: string;    // ISO 8601 timestamp
   updatedAt: string;    // ISO 8601 timestamp
+  version: number;      // Version number for optimistic locking
 }
 
 export interface CreateTodoRequest {
