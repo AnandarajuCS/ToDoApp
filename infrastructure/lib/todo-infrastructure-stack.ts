@@ -147,7 +147,7 @@ export class TodoInfrastructureStack extends cdk.Stack {
       deployOptions: {
         stageName: 'prod',
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
-        dataTraceEnabled: true,
+        dataTraceEnabled: false,
         metricsEnabled: true,
       },
     });
