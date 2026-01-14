@@ -38,12 +38,19 @@ export class TodoService {
     try {
       await this.docClient.send(new PutCommand({
         TableName: this.tableName,
-        Item: todoItem
+        Item: todoItem,
+        ConditionExpression: "attribute_not_exists(id)"
       }));
 
       console.log('Todo created successfully:', todoItem.id);
       return todoItem;
-    } catch (error) {
+    } catch (error: any) {
+      // Handle ID collision - extremely rare but critical to detect
+      if (error.name === 'ConditionalCheckFailedException') {
+        console.error('UUID collision detected for ID:', todoItem.id, '- This is extremely rare and should be investigated');
+        throw new Error('Failed to create todo item due to ID collision');
+      }
+      
       console.error('Error creating todo:', error);
       throw new Error('Failed to create todo item');
     }
