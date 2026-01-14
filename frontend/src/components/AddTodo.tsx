@@ -23,8 +23,9 @@ export const AddTodo: React.FC<AddTodoProps> = ({ onCreateTodo }) => {
       return;
     }
 
-    if (trimmedTitle.length > 500) {
-      setValidationError('Todo title cannot exceed 500 characters');
+    const byteSize = new TextEncoder().encode(trimmedTitle).length;
+    if (byteSize > 500) {
+      setValidationError('Todo title cannot exceed 500 bytes');
       return;
     }
 
@@ -58,7 +59,6 @@ export const AddTodo: React.FC<AddTodoProps> = ({ onCreateTodo }) => {
           placeholder="What needs to be done?"
           className={`todo-input ${validationError ? 'error' : ''}`}
           disabled={isSubmitting}
-          maxLength={500}
           autoFocus
         />
         <button 
@@ -77,7 +77,7 @@ export const AddTodo: React.FC<AddTodoProps> = ({ onCreateTodo }) => {
       )}
       
       <div className="character-count">
-        {title.length}/500
+        {new TextEncoder().encode(title).length}/500 bytes
       </div>
     </form>
   );
