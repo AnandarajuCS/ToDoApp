@@ -5,6 +5,7 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
@@ -18,6 +19,47 @@ export class TodoInfrastructureStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
+    // Cognito User Pool for Authentication
+    const userPool = new cognito.UserPool(this, 'TodoUserPool', {
+      userPoolName: 'TodoAppUserPool',
+      selfSignUpEnabled: true,
+      signInAliases: {
+        email: true,
+        username: true,
+      },
+      autoVerify: {
+        email: true,
+      },
+      passwordPolicy: {
+        minLength: 8,
+        requireLowercase: true,
+        requireUppercase: true,
+        requireDigits: true,
+        requireSymbols: true,
+      },
+      accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // For demo purposes
+    });
+
+    // Cognito User Pool Client
+    const userPoolClient = userPool.addClient('TodoAppClient', {
+      authFlows: {
+        userPassword: true,
+        userSrp: true,
+      },
+      oAuth: {
+        flows: {
+          authorizationCodeGrant: true,
+          implicitCodeGrant: true,
+        },
+        scopes: [
+          cognito.OAuthScope.EMAIL,
+          cognito.OAuthScope.OPENID,
+          cognito.OAuthScope.PROFILE,
+        ],
+      },
+    });
+
     // DynamoDB Table
     const todoTable = new dynamodb.Table(this, 'TodoTable', {
       tableName: 'TodoItems',
@@ -29,6 +71,20 @@ export class TodoInfrastructureStack extends cdk.Stack {
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // For demo purposes
       pointInTimeRecovery: true,
+    });
+
+    // Add Global Secondary Index for userId to enable efficient queries
+    todoTable.addGlobalSecondaryIndex({
+      indexName: 'UserIdIndex',
+      partitionKey: {
+        name: 'userId',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: 'createdAt',
+        type: dynamodb.AttributeType.STRING,
+      },
+      projectionType: dynamodb.ProjectionType.ALL,
     });
 
     // IAM Role for Lambda functions
@@ -48,8 +104,9 @@ export class TodoInfrastructureStack extends cdk.Stack {
                 'dynamodb:UpdateItem',
                 'dynamodb:DeleteItem',
                 'dynamodb:Scan',
+                'dynamodb:Query',
               ],
-              resources: [todoTable.tableArn],
+              resources: [todoTable.tableArn, `${todoTable.tableArn}/index/*`],
             }),
           ],
         }),
@@ -63,6 +120,7 @@ export class TodoInfrastructureStack extends cdk.Stack {
       code: lambda.Code.fromAsset('../backend/dist'),
       environment: {
         TODO_TABLE_NAME: todoTable.tableName,
+        USER_ID_INDEX_NAME: 'UserIdIndex',
       },
       role: lambdaRole,
       timeout: cdk.Duration.seconds(30),
@@ -75,6 +133,7 @@ export class TodoInfrastructureStack extends cdk.Stack {
       code: lambda.Code.fromAsset('../backend/dist'),
       environment: {
         TODO_TABLE_NAME: todoTable.tableName,
+        USER_ID_INDEX_NAME: 'UserIdIndex',
       },
       role: lambdaRole,
       timeout: cdk.Duration.seconds(30),
@@ -87,6 +146,7 @@ export class TodoInfrastructureStack extends cdk.Stack {
       code: lambda.Code.fromAsset('../backend/dist'),
       environment: {
         TODO_TABLE_NAME: todoTable.tableName,
+        USER_ID_INDEX_NAME: 'UserIdIndex',
       },
       role: lambdaRole,
       timeout: cdk.Duration.seconds(30),
@@ -99,6 +159,7 @@ export class TodoInfrastructureStack extends cdk.Stack {
       code: lambda.Code.fromAsset('../backend/dist'),
       environment: {
         TODO_TABLE_NAME: todoTable.tableName,
+        USER_ID_INDEX_NAME: 'UserIdIndex',
       },
       role: lambdaRole,
       timeout: cdk.Duration.seconds(30),
@@ -111,6 +172,7 @@ export class TodoInfrastructureStack extends cdk.Stack {
       code: lambda.Code.fromAsset('../backend/dist'),
       environment: {
         TODO_TABLE_NAME: todoTable.tableName,
+        USER_ID_INDEX_NAME: 'UserIdIndex',
       },
       role: lambdaRole,
       timeout: cdk.Duration.seconds(30),
@@ -152,26 +214,48 @@ export class TodoInfrastructureStack extends cdk.Stack {
       },
     });
 
+    // Cognito Authorizer for API Gateway
+    const authorizer = new apigateway.CognitoUserPoolsAuthorizer(this, 'TodoApiAuthorizer', {
+      cognitoUserPools: [userPool],
+      authorizerName: 'TodoCognitoAuthorizer',
+      identitySource: 'method.request.header.Authorization',
+    });
+
     // API Gateway Resources and Methods
     const todosResource = api.root.addResource('todos');
     
     // POST /todos
-    todosResource.addMethod('POST', new apigateway.LambdaIntegration(createTodoFunction));
+    todosResource.addMethod('POST', new apigateway.LambdaIntegration(createTodoFunction), {
+      authorizer,
+      authorizationType: apigateway.AuthorizationType.COGNITO,
+    });
     
     // GET /todos
-    todosResource.addMethod('GET', new apigateway.LambdaIntegration(getTodosFunction));
+    todosResource.addMethod('GET', new apigateway.LambdaIntegration(getTodosFunction), {
+      authorizer,
+      authorizationType: apigateway.AuthorizationType.COGNITO,
+    });
     
     // Individual todo resource
     const todoResource = todosResource.addResource('{id}');
     
     // GET /todos/{id}
-    todoResource.addMethod('GET', new apigateway.LambdaIntegration(getTodoFunction));
+    todoResource.addMethod('GET', new apigateway.LambdaIntegration(getTodoFunction), {
+      authorizer,
+      authorizationType: apigateway.AuthorizationType.COGNITO,
+    });
     
     // PUT /todos/{id}
-    todoResource.addMethod('PUT', new apigateway.LambdaIntegration(updateTodoFunction));
+    todoResource.addMethod('PUT', new apigateway.LambdaIntegration(updateTodoFunction), {
+      authorizer,
+      authorizationType: apigateway.AuthorizationType.COGNITO,
+    });
     
     // DELETE /todos/{id}
-    todoResource.addMethod('DELETE', new apigateway.LambdaIntegration(deleteTodoFunction));
+    todoResource.addMethod('DELETE', new apigateway.LambdaIntegration(deleteTodoFunction), {
+      authorizer,
+      authorizationType: apigateway.AuthorizationType.COGNITO,
+    });
 
     // Health check endpoint
     const healthResource = api.root.addResource('health');
@@ -290,6 +374,26 @@ export class TodoInfrastructureStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'TodoTableName', {
       value: todoTable.tableName,
       description: 'DynamoDB Table Name',
+    });
+
+    new cdk.CfnOutput(this, 'UserPoolId', {
+      value: userPool.userPoolId,
+      description: 'Cognito User Pool ID',
+    });
+
+    new cdk.CfnOutput(this, 'UserPoolClientId', {
+      value: userPoolClient.userPoolClientId,
+      description: 'Cognito User Pool Client ID',
+    });
+
+    new cdk.CfnOutput(this, 'UserPoolArn', {
+      value: userPool.userPoolArn,
+      description: 'Cognito User Pool ARN',
+    });
+
+    new cdk.CfnOutput(this, 'UserIdIndexName', {
+      value: 'UserIdIndex',
+      description: 'DynamoDB GSI for userId queries',
     });
   }
 }
