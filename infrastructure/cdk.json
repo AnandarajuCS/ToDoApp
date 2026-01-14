@@ -17,6 +17,18 @@
     ]
   },
   "context": {
+    "//": "=== Environment Configuration ===",
+    "//description": "Customize these values for your deployment environment",
+    "//domainName": "todo.example.com",
+    "//hostedZoneName": "example.com",
+    "//environmentName": "dev",
+    "//": "=== Current Environment (examples - uncomment and modify as needed) ===",
+    "//example-dev": "Set environmentName to 'dev' for development (uses DESTROY removal policy)",
+    "//example-prod": "Set environmentName to 'prod' for production (uses RETAIN removal policy)",
+    "//": "=== Custom Domain (optional) ===",
+    "//domain-note": "Leave domainName and hostedZoneName commented out to deploy without custom domain",
+    "//domain-note2": "If using custom domain, both domainName and hostedZoneName are required",
+    "//": "=== CDK Feature Flags ===",
     "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
     "@aws-cdk/core:checkSecretUsage": true,
     "@aws-cdk/core:target-partitions": ["aws", "aws-cn"],
