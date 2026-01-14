@@ -134,7 +134,7 @@ export class TodoInfrastructureStack extends cdk.Stack {
       restApiName: 'Todo Service',
       description: 'This service serves the Todo application API.',
       defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowOrigins: ['https://todo.test.anandsjo.com'],
         allowMethods: apigateway.Cors.ALL_METHODS,
         allowHeaders: [
           'Content-Type',
