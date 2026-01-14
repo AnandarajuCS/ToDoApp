@@ -49,6 +49,17 @@ export function validateTodoId(id: string): void {
     errors.push({ field: 'id', message: 'ID must be a string' });
   } else if (id.trim().length === 0) {
     errors.push({ field: 'id', message: 'ID cannot be empty' });
+  } else {
+    // UUID v4 format validation: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+    // where x is any hexadecimal digit and y is one of 8, 9, a, or b
+    const uuidV4Pattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    
+    if (!uuidV4Pattern.test(id)) {
+      errors.push({ 
+        field: 'id', 
+        message: 'ID must be a valid UUID v4 format' 
+      });
+    }
   }
 
   if (errors.length > 0) {
