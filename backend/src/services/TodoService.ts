@@ -4,8 +4,7 @@ import {
   PutCommand, 
   GetCommand, 
   ScanCommand, 
-  UpdateCommand, 
-  DeleteCommand 
+  UpdateCommand
 } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuidv4 } from 'uuid';
 import { TodoItem, CreateTodoRequest, UpdateTodoRequest } from '../types/TodoItem';
@@ -31,7 +30,8 @@ export class TodoService {
       id: uuidv4(),
       title: request.title.trim(),
       completed: false,
-      createdAt: now,
+      updatedAt: now,
+      deleted: false
       updatedAt: now
     };
 
@@ -65,8 +65,16 @@ export class TodoService {
         return null;
       }
 
+      const todoItem = result.Item as TodoItem;
+      
+      // Treat soft-deleted items as not found
+      if (todoItem.deleted) {
+        console.log('Todo is deleted:', id);
+        return null;
+      }
+
       console.log('Todo retrieved successfully:', id);
-      return result.Item as TodoItem;
+      return todoItem;
     } catch (error) {
       console.error('Error getting todo:', error);
       throw new Error('Failed to retrieve todo item');
@@ -84,9 +92,13 @@ export class TodoService {
       const todos = (result.Items || []) as TodoItem[];
       console.log(`Retrieved ${todos.length} todos`);
       
+      // Filter out soft-deleted items
+      const activeTodos = todos.filter(todo => !todo.deleted);
+      
+      console.log(`Retrieved ${activeTodos.length} active todos (${todos.length} total)`);
       // Sort by creation date, newest first
       return todos.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    } catch (error) {
+      return activeTodos.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       console.error('Error getting all todos:', error);
       throw new Error('Failed to retrieve todo items');
     }
