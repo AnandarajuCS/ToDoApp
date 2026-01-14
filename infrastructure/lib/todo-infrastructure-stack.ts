@@ -202,6 +202,61 @@ export class TodoInfrastructureStack extends cdk.Stack {
       validation: certificatemanager.CertificateValidation.fromDns(hostedZone),
     });
 
+    // Response Headers Policy for security headers
+    const securityHeadersPolicy = new cloudfront.ResponseHeadersPolicy(this, 'SecurityHeadersPolicy', {
+      responseHeadersPolicyName: 'TodoAppSecurityHeaders',
+      comment: 'Security headers for Todo application',
+      securityHeadersBehavior: {
+        contentTypeOptions: {
+          override: true,
+        },
+        frameOptions: {
+          frameOption: cloudfront.HeadersFrameOption.DENY,
+          override: true,
+        },
+        xssProtection: {
+          protection: true,
+          modeBlock: true,
+          override: true,
+        },
+        strictTransportSecurity: {
+          accessControlMaxAge: cdk.Duration.seconds(31536000),
+          includeSubdomains: true,
+          override: true,
+        },
+        contentSecurityPolicy: {
+          contentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.amazonaws.com https://*.execute-api.*.amazonaws.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+          override: true,
+        },
+        referrerPolicy: {
+          referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN,
+          override: true,
+        },
+      },
+      customHeadersBehavior: {
+        customHeaders: [
+          {
+            header: 'Permissions-Policy',
+            value: 'geolocation=(), microphone=(), camera=()',
+            override: true,
+          },
+        ],
+      },
+      // Preserve CORS headers from origin
+      corsHeadersBehavior: {
+        accessControlAllowOrigins: {
+          items: ['*'],
+        },
+        accessControlAllowHeaders: {
+          items: ['*'],
+        },
+        accessControlAllowMethods: {
+          items: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'POST', 'DELETE'],
+        },
+        originOverride: false,
+      },
+    });
+
     // CloudFront Distribution
     const distribution = new cloudfront.Distribution(this, 'TodoDistribution', {
       domainNames: [domainName],
@@ -214,6 +269,7 @@ export class TodoInfrastructureStack extends cdk.Stack {
         allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
         cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
         compress: true,
+        responseHeadersPolicy: securityHeadersPolicy,
       },
       defaultRootObject: 'index.html',
       errorResponses: [
