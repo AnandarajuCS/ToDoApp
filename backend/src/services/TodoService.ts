@@ -92,6 +92,32 @@ export class TodoService {
     }
   }
 
+  /**
+   * Lightweight database connectivity check for health monitoring.
+   * Uses a limited scan (1 item) to minimize resource consumption.
+   * This method should be used by health checks instead of getAllTodos().
+   * 
+   * @returns Promise<boolean> - Returns true if database is accessible
+   * @throws Error if database connection fails
+   */
+  async checkDatabaseConnection(): Promise<boolean> {
+    console.log('Checking database connectivity');
+
+    try {
+      // Perform minimal scan operation to verify table accessibility
+      await this.docClient.send(new ScanCommand({
+        TableName: this.tableName,
+        Limit: 1  // Only scan 1 item to minimize RCU consumption
+      }));
+
+      console.log('Database connectivity check passed');
+      return true;
+    } catch (error) {
+      console.error('Database connectivity check failed:', error);
+      throw new Error('Database connection failed');
+    }
+  }
+
   async updateTodo(id: string, request: UpdateTodoRequest): Promise<TodoItem | null> {
     console.log('Updating todo:', id, JSON.stringify(request));
     

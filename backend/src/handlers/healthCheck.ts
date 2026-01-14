@@ -18,8 +18,8 @@ export const handler = async (
   });
 
   try {
-    // Test database connectivity
-    await todoService.getAllTodos();
+    // Test database connectivity with minimal resource consumption
+    await todoService.checkDatabaseConnection();
     
     const healthStatus = {
       status: 'healthy',
