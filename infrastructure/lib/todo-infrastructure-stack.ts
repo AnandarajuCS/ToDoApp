@@ -14,9 +14,45 @@ import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53targets from 'aws-cdk-lib/aws-route53-targets';
 import { Construct } from 'constructs';
 
+/**
+ * Configuration properties for the Todo Infrastructure Stack
+ */
+export interface TodoInfrastructureStackProps extends cdk.StackProps {
+  /**
+   * Custom domain name for the application (e.g., 'todo.example.com')
+   * If not provided, only CloudFront distribution URL will be available
+   */
+  domainName?: string;
+  
+  /**
+   * Route53 hosted zone name (e.g., 'example.com')
+   * Required if domainName is provided
+   */
+  hostedZoneName?: string;
+  
+  /**
+   * Environment name (e.g., 'dev', 'staging', 'prod')
+   * Used to determine removal policies and other environment-specific settings
+   */
+  environmentName?: string;
+}
+
 export class TodoInfrastructureStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props?: TodoInfrastructureStackProps) {
     super(scope, id, props);
+
+    // Determine removal policy based on environment
+    // SECURITY: DESTROY policy will permanently delete all data when stack is destroyed
+    // Use RETAIN for production environments to prevent accidental data loss
+    const environmentName = props?.environmentName || 'dev';
+    const isDevelopment = environmentName === 'dev' || environmentName === 'development';
+    const removalPolicy = isDevelopment ? cdk.RemovalPolicy.DESTROY : cdk.RemovalPolicy.RETAIN;
+    
+    if (removalPolicy === cdk.RemovalPolicy.DESTROY) {
+      console.warn('⚠️  WARNING: Resources are configured with DESTROY removal policy.');
+      console.warn('⚠️  All data will be permanently deleted when this stack is destroyed.');
+      console.warn('⚠️  Set environmentName to "prod" or "production" to use RETAIN policy.');
+    }
 
     // DynamoDB Table
     const todoTable = new dynamodb.Table(this, 'TodoTable', {
@@ -27,7 +63,7 @@ export class TodoInfrastructureStack extends cdk.Stack {
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // For demo purposes
+      removalPolicy: removalPolicy,
       pointInTimeRecovery: true,
     });
 
@@ -181,8 +217,8 @@ export class TodoInfrastructureStack extends cdk.Stack {
     const websiteBucket = new s3.Bucket(this, 'TodoWebsiteBucket', {
       bucketName: `todo-app-frontend-${this.account}-${this.region}`,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // For demo purposes
-      autoDeleteObjects: true, // For demo purposes
+      removalPolicy: removalPolicy,
+      autoDeleteObjects: isDevelopment, // Only auto-delete in development
     });
 
     // Origin Access Control for CloudFront
@@ -191,21 +227,35 @@ export class TodoInfrastructureStack extends cdk.Stack {
     });
 
     // Custom domain configuration
-    const domainName = 'todo.test.anandsjo.com';
-    const hostedZone = route53.HostedZone.fromLookup(this, 'HostedZone', {
-      domainName: 'test.anandsjo.com',
-    });
+    // Custom domain is optional - only configure if provided
+    const domainName = props?.domainName;
+    const hostedZoneName = props?.hostedZoneName;
+    
+    let certificate: certificatemanager.ICertificate | undefined;
+    let hostedZone: route53.IHostedZone | undefined;
+    
+    if (domainName && hostedZoneName) {
+      // Lookup existing hosted zone
+      hostedZone = route53.HostedZone.fromLookup(this, 'HostedZone', {
+        domainName: hostedZoneName,
+      });
 
-    // SSL Certificate for custom domain (must be in us-east-1 for CloudFront)
-    const certificate = new certificatemanager.Certificate(this, 'TodoCertificate', {
-      domainName: domainName,
-      validation: certificatemanager.CertificateValidation.fromDns(hostedZone),
-    });
+      // SSL Certificate for custom domain (must be in us-east-1 for CloudFront)
+      certificate = new certificatemanager.Certificate(this, 'TodoCertificate', {
+        domainName: domainName,
+        validation: certificatemanager.CertificateValidation.fromDns(hostedZone),
+      });
+    } else if (domainName || hostedZoneName) {
+      // Error if only one is provided
+      throw new Error('Both domainName and hostedZoneName must be provided together, or neither');
+    }
 
     // CloudFront Distribution
-    const distribution = new cloudfront.Distribution(this, 'TodoDistribution', {
-      domainNames: [domainName],
-      certificate: certificate,
+    const distributionProps: cloudfront.DistributionProps = {
+      ...(domainName && certificate ? {
+        domainNames: [domainName],
+        certificate: certificate,
+      } : {}),
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(websiteBucket, {
           originAccessControl,
@@ -223,7 +273,9 @@ export class TodoInfrastructureStack extends cdk.Stack {
           responsePagePath: '/index.html',
         },
       ],
-    });
+    };
+    
+    const distribution = new cloudfront.Distribution(this, 'TodoDistribution', distributionProps);
 
     // Deploy frontend (placeholder - will be updated after frontend is built)
     new s3deploy.BucketDeployment(this, 'DeployWebsite', {
@@ -265,11 +317,15 @@ export class TodoInfrastructureStack extends cdk.Stack {
     });
 
     // Route53 record to point custom domain to CloudFront
-    new route53.ARecord(this, 'TodoAliasRecord', {
-      zone: hostedZone,
-      recordName: 'todo',
-      target: route53.RecordTarget.fromAlias(new route53targets.CloudFrontTarget(distribution)),
-    });
+    // Only create if custom domain is configured
+    if (domainName && hostedZone) {
+      const recordName = domainName.replace(`.${hostedZoneName}`, '');
+      new route53.ARecord(this, 'TodoAliasRecord', {
+        zone: hostedZone,
+        recordName: recordName,
+        target: route53.RecordTarget.fromAlias(new route53targets.CloudFrontTarget(distribution)),
+      });
+    }
 
     // Outputs
     new cdk.CfnOutput(this, 'ApiUrl', {
@@ -282,10 +338,12 @@ export class TodoInfrastructureStack extends cdk.Stack {
       description: 'CloudFront Distribution URL',
     });
 
-    new cdk.CfnOutput(this, 'CustomDomainUrl', {
-      value: `https://${domainName}`,
-      description: 'Custom Domain URL',
-    });
+    if (domainName) {
+      new cdk.CfnOutput(this, 'CustomDomainUrl', {
+        value: `https://${domainName}`,
+        description: 'Custom Domain URL',
+      });
+    }
 
     new cdk.CfnOutput(this, 'TodoTableName', {
       value: todoTable.tableName,
