@@ -190,6 +190,32 @@ export class TodoInfrastructureStack extends cdk.Stack {
       description: 'OAC for Todo App S3 bucket',
     });
 
+    // CloudFront Function to block access to source map files
+    // This prevents information disclosure by blocking .map files that expose source code
+    const blockSourceMapsFunction = new cloudfront.Function(this, 'BlockSourceMapsFunction', {
+      functionName: 'block-source-maps',
+      code: cloudfront.FunctionCode.fromInline(`
+function handler(event) {
+  var request = event.request;
+  var uri = request.uri;
+  
+  // Block access to source map files (.map) to prevent information disclosure
+  // Source maps expose complete TypeScript source code, API endpoints, and implementation details
+  if (uri.endsWith('.map')) {
+    return {
+      statusCode: 403,
+      statusDescription: 'Forbidden',
+      headers: {
+        'content-type': { value: 'text/plain' }
+      }
+    };
+  }
+  
+  return request;
+}
+      `),
+    });
+
     // Custom domain configuration
     const domainName = 'todo.test.anandsjo.com';
     const hostedZone = route53.HostedZone.fromLookup(this, 'HostedZone', {
@@ -214,6 +240,12 @@ export class TodoInfrastructureStack extends cdk.Stack {
         allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
         cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
         compress: true,
+        functionAssociations: [
+          {
+            function: blockSourceMapsFunction,
+            eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+          },
+        ],
       },
       defaultRootObject: 'index.html',
       errorResponses: [
