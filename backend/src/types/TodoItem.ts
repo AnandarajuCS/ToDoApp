@@ -4,10 +4,12 @@ export interface TodoItem {
   completed: boolean;   // Completion status
   createdAt: string;    // ISO 8601 timestamp
   updatedAt: string;    // ISO 8601 timestamp
+  idempotencyToken?: string; // Optional idempotency token for duplicate prevention
 }
 
 export interface CreateTodoRequest {
   title: string;
+  idempotencyToken?: string; // Optional idempotency token for duplicate prevention
 }
 
 export interface UpdateTodoRequest {

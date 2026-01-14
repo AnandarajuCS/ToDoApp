@@ -26,24 +26,63 @@ export class TodoService {
     
     validateCreateTodoRequest(request);
 
+    // Check for idempotency token - if provided, check if todo already exists with this token
+    if (request.idempotencyToken) {
+      console.log('Idempotency token provided:', request.idempotencyToken);
+      
+      try {
+        // Scan for existing todo with this idempotency token
+        const existingTodoResult = await this.docClient.send(new ScanCommand({
+          TableName: this.tableName,
+          FilterExpression: 'idempotencyToken = :token',
+          ExpressionAttributeValues: {
+            ':token': request.idempotencyToken
+          },
+          Limit: 1
+        }));
+
+        if (existingTodoResult.Items && existingTodoResult.Items.length > 0) {
+          const existingTodo = existingTodoResult.Items[0] as TodoItem;
+          console.log('Idempotent request detected - returning existing todo:', existingTodo.id);
+          return existingTodo;
+        }
+      } catch (error) {
+        console.error('Error checking idempotency token:', error);
+        // Continue with creation if idempotency check fails (fail open)
+      }
+    }
+
     const now = new Date().toISOString();
     const todoItem: TodoItem = {
       id: uuidv4(),
       title: request.title.trim(),
       completed: false,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
+      idempotencyToken: request.idempotencyToken
     };
 
     try {
-      await this.docClient.send(new PutCommand({
+      // Use conditional expression to prevent overwriting if ID somehow already exists
+      const putParams: any = {
         TableName: this.tableName,
-        Item: todoItem
-      }));
+        Item: todoItem,
+        ConditionExpression: 'attribute_not_exists(id)'
+      };
+
+      await this.docClient.send(new PutCommand(putParams));
 
       console.log('Todo created successfully:', todoItem.id);
       return todoItem;
     } catch (error) {
+      // Check if this is a conditional check failure (race condition)
+      if ((error as any).name === 'ConditionalCheckFailedException') {
+        console.warn('Conditional check failed - todo ID already exists (race condition):', todoItem.id);
+        // In case of race condition with same idempotency token, try to retrieve the existing item
+        const existingTodo = await this.getTodo(todoItem.id);
+        if (existingTodo) return existingTodo;
+      }
+      
       console.error('Error creating todo:', error);
       throw new Error('Failed to create todo item');
     }
