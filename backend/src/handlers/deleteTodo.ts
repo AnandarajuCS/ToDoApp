@@ -5,6 +5,7 @@ import {
   createNoContentResponse,
   createNotFoundResponse,
   createBadRequestResponse,
+  createForbiddenResponse,
   createInternalServerErrorResponse
 } from '../utils/response';
 
@@ -23,12 +24,19 @@ export const handler = async (
 
   try {
     const id = event.pathParameters?.id;
+    // Extract userId from authorizer context
+    const userId = event.requestContext.authorizer?.claims?.sub || 
+                   event.requestContext.authorizer?.principalId ||
+                   'anonymous';
+    
+    console.log('DeleteTodo - User context', { userId, todoId: event.pathParameters?.id });
+
     if (!id) {
       return createBadRequestResponse('Todo ID is required');
     }
 
     const deleted = await todoService.deleteTodo(id);
-    
+    const deleted = await todoService.deleteTodo(id, userId);
     if (!deleted) {
       console.log('Todo not found for deletion', { todoId: id });
       return createNotFoundResponse('Todo not found');
@@ -44,6 +52,11 @@ export const handler = async (
       return createBadRequestResponse('Validation failed', error.errors);
     }
 
+
+    if (error instanceof Error && error.message.startsWith('Forbidden:')) {
+      console.log('Delete forbidden', { error: error.message });
+      return createForbiddenResponse(error.message.replace('Forbidden: ', ''));
+    }
     return createInternalServerErrorResponse('Failed to delete todo');
   }
 };

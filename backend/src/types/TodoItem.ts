@@ -1,5 +1,6 @@
 export interface TodoItem {
   id: string;           // UUID v4 - Partition key
+  userId: string;       // User ID from authentication context - Owner of the todo
   title: string;        // Todo description (1-500 characters)
   completed: boolean;   // Completion status
   createdAt: string;    // ISO 8601 timestamp

@@ -37,6 +37,10 @@ export function createBadRequestResponse(message: string, errors?: any): APIGate
 export function createNotFoundResponse(message: string = 'Resource not found'): APIGatewayProxyResult {
   return createResponse(404, { error: message });
 }
+export function createForbiddenResponse(message: string = 'Forbidden'): APIGatewayProxyResult {
+  return createResponse(403, { error: message });
+}
+
 
 export function createInternalServerErrorResponse(message: string = 'Internal server error'): APIGatewayProxyResult {
   return createResponse(500, { error: message });

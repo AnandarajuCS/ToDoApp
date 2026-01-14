@@ -27,6 +27,17 @@ export const handler = async (
   });
 
   try {
+    // Extract userId from authorizer context
+    // Support both Cognito authorizer (claims.sub) and custom authorizer (principalId)
+    const userId = event.requestContext.authorizer?.claims?.sub || 
+                   event.requestContext.authorizer?.principalId ||
+                   'anonymous';
+    
+    Logger.info('User context extracted', {
+      ...requestContext,
+      userId: userId
+    });
+
     if (!event.body) {
       Logger.warn('Request body missing', requestContext);
       return createBadRequestResponse('Request body is required');
@@ -40,7 +51,7 @@ export const handler = async (
       return createBadRequestResponse('Invalid JSON in request body');
     }
 
-    const todo = await todoService.createTodo(request);
+    const todo = await todoService.createTodo(request, userId);
     
     Logger.info('Todo created successfully', { 
       ...requestContext, 

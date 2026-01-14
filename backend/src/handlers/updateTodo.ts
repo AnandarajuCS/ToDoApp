@@ -5,6 +5,7 @@ import {
   createSuccessResponse,
   createNotFoundResponse,
   createBadRequestResponse,
+  createForbiddenResponse,
   createInternalServerErrorResponse
 } from '../utils/response';
 
@@ -22,6 +23,13 @@ export const handler = async (
   });
 
   try {
+    // Extract userId from authorizer context
+    const userId = event.requestContext.authorizer?.claims?.sub || 
+                   event.requestContext.authorizer?.principalId ||
+                   'anonymous';
+    
+    console.log('UpdateTodo - User context', { userId, todoId: event.pathParameters?.id });
+
     const id = event.pathParameters?.id;
     if (!id) {
       return createBadRequestResponse('Todo ID is required');
@@ -38,7 +46,7 @@ export const handler = async (
       return createBadRequestResponse('Invalid JSON in request body');
     }
 
-    const updatedTodo = await todoService.updateTodo(id, request);
+    const updatedTodo = await todoService.updateTodo(id, request, userId);
     
     if (!updatedTodo) {
       console.log('Todo not found for update', { todoId: id });
@@ -53,6 +61,11 @@ export const handler = async (
 
     if (error instanceof TodoValidationException) {
       return createBadRequestResponse('Validation failed', error.errors);
+    }
+
+    if (error instanceof Error && error.message.startsWith('Forbidden:')) {
+      console.log('Update forbidden', { error: error.message });
+      return createForbiddenResponse(error.message.replace('Forbidden: ', ''));
     }
 
     return createInternalServerErrorResponse('Failed to update todo');
