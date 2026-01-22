@@ -1,0 +1,57 @@
+name: Deploy with PenTest Verification
+
+on:
+  workflow_dispatch:  # Allows manual triggering for testing
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Application
+        run: |
+          echo "🔨 Building application..."
+          echo "Build completed successfully!"
+
+  deploy-preprod:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to PreProd
+        run: |
+          echo "🚀 Deploying to PreProd environment..."
+          echo "PreProd URL: https://preprod.example.com"
+          echo "Deployment completed at $(date)"
+
+  verify-preprod:
+    needs: deploy-preprod
+    runs-on: ubuntu-latest
+    environment: preprod-verification  # This creates the approval gate
+    steps:
+      - name: Waiting for PenTest Verification
+        run: |
+          echo "⏳ Deployment complete. Waiting for PenTest Agent verification..."
+          echo "📋 Workflow Run ID: ${{ github.run_id }}"
+          echo "📦 Repository: ${{ github.repository }}"
+          echo "🌿 Branch: ${{ github.ref_name }}"
+          echo ""
+          echo "RMA will approve/reject this environment after PenTest replay completes"
+          echo "For POC: Use GitHub API from terminal to approve/reject"
+
+      - name: Post-Approval Actions
+        run: |
+          echo "✅ Environment approved! Proceeding with next steps..."
+          echo "Running post-verification checks..."
+
+  deploy-prod:
+    needs: verify-preprod
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to Production
+        run: |
+          echo "🚀 Deploying to Production environment..."
+          echo "Production URL: https://prod.example.com"
+          echo "Production deployment completed at $(date)"
+          echo "✨ Deployment pipeline finished successfully!"
