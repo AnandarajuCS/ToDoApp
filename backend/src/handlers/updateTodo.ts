@@ -5,6 +5,7 @@ import {
   createSuccessResponse,
   createNotFoundResponse,
   createBadRequestResponse,
+  createUnauthorizedResponse,
   createInternalServerErrorResponse
 } from '../utils/response';
 
@@ -22,6 +23,16 @@ export const handler = async (
   });
 
   try {
+  // Extract userId from Cognito authorizer claims
+  const userId = event.requestContext?.authorizer?.claims?.sub;
+  
+  if (!userId) {
+    console.error('User ID not found in request context');
+    return createUnauthorizedResponse('Authentication required');
+  }
+
+  console.log('Authenticated user:', userId);
+
     const id = event.pathParameters?.id;
     if (!id) {
       return createBadRequestResponse('Todo ID is required');
@@ -38,14 +49,21 @@ export const handler = async (
       return createBadRequestResponse('Invalid JSON in request body');
     }
 
-    const updatedTodo = await todoService.updateTodo(id, request);
+    const updatedTodo = await todoService.updateTodo(userId, id, request);
     
     if (!updatedTodo) {
-      console.log('Todo not found for update', { todoId: id });
+      // Todo not found or access denied
+      console.log('Todo not found or access denied for update', { 
+        todoId: id, 
+        userId 
+      });
       return createNotFoundResponse('Todo not found');
     }
 
-    console.log('Todo updated successfully', { todoId: id });
+    console.log('Todo updated successfully', { 
+      todoId: id, 
+      userId 
+    });
     return createSuccessResponse(updatedTodo);
 
   } catch (error) {
