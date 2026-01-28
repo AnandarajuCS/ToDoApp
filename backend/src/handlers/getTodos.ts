@@ -24,7 +24,17 @@ export const handler = async (
   });
 
   try {
-    const todos = await todoService.getAllTodos();
+    // Extract userId from authorizer context
+    const userId = event.requestContext.authorizer?.claims?.sub || 
+                   event.requestContext.authorizer?.principalId ||
+                   undefined; // Allow anonymous for backward compatibility
+    
+    Logger.info('GetTodos - User context', {
+      ...requestContext,
+      userId: userId || 'anonymous'
+    });
+
+    const todos = await todoService.getAllTodos(userId);
     
     Logger.info('Todos retrieved successfully', { 
       ...requestContext, 

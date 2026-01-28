@@ -21,7 +21,7 @@ export class TodoService {
     this.tableName = process.env.TODO_TABLE_NAME || 'TodoItems';
   }
 
-  async createTodo(request: CreateTodoRequest): Promise<TodoItem> {
+  async createTodo(request: CreateTodoRequest, userId: string): Promise<TodoItem> {
     console.log('Creating todo:', JSON.stringify(request));
     
     validateCreateTodoRequest(request);
@@ -29,6 +29,7 @@ export class TodoService {
     const now = new Date().toISOString();
     const todoItem: TodoItem = {
       id: uuidv4(),
+      userId: userId,
       title: request.title.trim(),
       completed: false,
       createdAt: now,
@@ -49,7 +50,7 @@ export class TodoService {
     }
   }
 
-  async getTodo(id: string): Promise<TodoItem | null> {
+  async getTodo(id: string, userId?: string): Promise<TodoItem | null> {
     console.log('Getting todo:', id);
     
     validateTodoId(id);
@@ -66,6 +67,12 @@ export class TodoService {
       }
 
       console.log('Todo retrieved successfully:', id);
+      // Validate ownership if userId is provided
+      if (userId && result.Item.userId !== userId) {
+        console.log('Todo access denied - ownership mismatch:', id);
+        return null;
+      }
+
       return result.Item as TodoItem;
     } catch (error) {
       console.error('Error getting todo:', error);
@@ -74,14 +81,30 @@ export class TodoService {
   }
 
   async getAllTodos(): Promise<TodoItem[]> {
-    console.log('Getting all todos');
+  async getAllTodos(userId?: string): Promise<TodoItem[]> {
 
     try {
       const result = await this.docClient.send(new ScanCommand({
-        TableName: this.tableName
-      }));
-
+      let result;
       const todos = (result.Items || []) as TodoItem[];
+      if (userId) {
+        // Filter by userId if provided
+        result = await this.docClient.send(new ScanCommand({
+          TableName: this.tableName,
+          FilterExpression: 'userId = :userId',
+          ExpressionAttributeValues: {
+            ':userId': userId
+          }
+        }));
+        console.log(`Filtering todos for user: ${userId}`);
+      } else {
+        // Return all todos if no userId (backward compatibility for testing)
+        result = await this.docClient.send(new ScanCommand({
+          TableName: this.tableName
+        }));
+        console.log('Retrieving all todos (no user filter)');
+      }
+
       console.log(`Retrieved ${todos.length} todos`);
       
       // Sort by creation date, newest first
@@ -93,7 +116,7 @@ export class TodoService {
   }
 
   async updateTodo(id: string, request: UpdateTodoRequest): Promise<TodoItem | null> {
-    console.log('Updating todo:', id, JSON.stringify(request));
+  async updateTodo(id: string, request: UpdateTodoRequest, userId: string): Promise<TodoItem | null> {
     
     validateTodoId(id);
     validateUpdateTodoRequest(request);
@@ -105,6 +128,12 @@ export class TodoService {
     }
 
     const now = new Date().toISOString();
+    // Validate ownership
+    if (existingTodo.userId !== userId) {
+      console.log('Update denied - user does not own todo:', id);
+      throw new Error('Forbidden: You do not have permission to update this todo');
+    }
+
     const updateExpression: string[] = [];
     const expressionAttributeValues: any = {};
     const expressionAttributeNames: any = {};
@@ -141,7 +170,7 @@ export class TodoService {
     }
   }
 
-  async deleteTodo(id: string): Promise<boolean> {
+  async deleteTodo(id: string, userId: string): Promise<boolean> {
     console.log('Deleting todo:', id);
     
     validateTodoId(id);
@@ -153,6 +182,12 @@ export class TodoService {
     }
 
     try {
+    // Validate ownership
+    if (existingTodo.userId !== userId) {
+      console.log('Delete denied - user does not own todo:', id);
+      throw new Error('Forbidden: You do not have permission to delete this todo');
+    }
+
       await this.docClient.send(new DeleteCommand({
         TableName: this.tableName,
         Key: { id }
