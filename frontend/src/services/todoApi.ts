@@ -1,4 +1,5 @@
 import { Todo, CreateTodoRequest, UpdateTodoRequest, ApiError } from '../types/Todo';
+import { v4 as uuidv4 } from 'uuid';
 
 class TodoApiService {
   private baseUrl: string;
@@ -86,9 +87,18 @@ class TodoApiService {
   }
 
   async createTodo(request: CreateTodoRequest): Promise<Todo> {
+    // Generate idempotency token for this create request
+    // This ensures retries use the same token to prevent duplicates
+    const idempotencyToken = uuidv4();
+    
+    const requestWithToken = {
+      ...request,
+      idempotencyToken
+    };
+
     return this.makeRequest<Todo>('/todos', {
       method: 'POST',
-      body: JSON.stringify(request),
+      body: JSON.stringify(requestWithToken),
     });
   }
 

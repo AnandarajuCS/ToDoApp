@@ -13,6 +13,13 @@ export function validateCreateTodoRequest(request: CreateTodoRequest): void {
     errors.push({ field: 'title', message: 'Title cannot exceed 500 characters' });
   }
 
+  // Validate idempotency token if provided
+  if (request.idempotencyToken !== undefined) {
+    if (typeof request.idempotencyToken !== 'string' || request.idempotencyToken.trim().length === 0) {
+      errors.push({ field: 'idempotencyToken', message: 'Idempotency token must be a non-empty string' });
+    }
+  }
+
   if (errors.length > 0) {
     throw new TodoValidationException(errors);
   }
