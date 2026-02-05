@@ -202,6 +202,44 @@ export class TodoInfrastructureStack extends cdk.Stack {
       validation: certificatemanager.CertificateValidation.fromDns(hostedZone),
     });
 
+    // Response Headers Policy with Content Security Policy
+    const responseHeadersPolicy = new cloudfront.ResponseHeadersPolicy(this, 'TodoSecurityHeadersPolicy', {
+      responseHeadersPolicyName: 'TodoSecurityHeaders',
+      comment: 'Security headers including CSP for Todo App',
+      securityHeadersBehavior: {
+        contentSecurityPolicy: {
+          contentSecurityPolicy: [
+            "default-src 'self'",
+            "script-src 'self' 'unsafe-inline'",
+            "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' data:",
+            "font-src 'self'",
+            `connect-src 'self' https://*.execute-api.${this.region}.amazonaws.com`,
+            "frame-ancestors 'none'",
+            "base-uri 'self'",
+            "form-action 'self'",
+          ].join('; '),
+          override: true,
+        },
+        contentTypeOptions: {
+          override: true,
+        },
+        frameOptions: {
+          frameOption: cloudfront.HeadersFrameOption.DENY,
+          override: true,
+        },
+        referrerPolicy: {
+          referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN,
+          override: true,
+        },
+        strictTransportSecurity: {
+          accessControlMaxAge: cdk.Duration.seconds(31536000),
+          includeSubdomains: true,
+          override: true,
+        },
+      },
+    });
+
     // CloudFront Distribution
     const distribution = new cloudfront.Distribution(this, 'TodoDistribution', {
       domainNames: [domainName],
@@ -214,6 +252,7 @@ export class TodoInfrastructureStack extends cdk.Stack {
         allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
         cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
         compress: true,
+        responseHeadersPolicy: responseHeadersPolicy,
       },
       defaultRootObject: 'index.html',
       errorResponses: [
