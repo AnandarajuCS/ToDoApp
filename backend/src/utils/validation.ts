@@ -9,8 +9,8 @@ export function validateCreateTodoRequest(request: CreateTodoRequest): void {
     errors.push({ field: 'title', message: 'Title must be a string' });
   } else if (request.title.trim().length === 0) {
     errors.push({ field: 'title', message: 'Title cannot be empty or whitespace only' });
-  } else if (request.title.length > 500) {
-    errors.push({ field: 'title', message: 'Title cannot exceed 500 characters' });
+  } else if (Buffer.byteLength(request.title, 'utf8') > 500) {
+    errors.push({ field: 'title', message: 'Title cannot exceed 500 bytes' });
   }
 
   if (errors.length > 0) {
@@ -26,8 +26,8 @@ export function validateUpdateTodoRequest(request: UpdateTodoRequest): void {
       errors.push({ field: 'title', message: 'Title must be a string' });
     } else if (request.title.trim().length === 0) {
       errors.push({ field: 'title', message: 'Title cannot be empty or whitespace only' });
-    } else if (request.title.length > 500) {
-      errors.push({ field: 'title', message: 'Title cannot exceed 500 characters' });
+    } else if (Buffer.byteLength(request.title, 'utf8') > 500) {
+      errors.push({ field: 'title', message: 'Title cannot exceed 500 bytes' });
     }
   }
 
