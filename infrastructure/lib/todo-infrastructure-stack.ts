@@ -10,6 +10,8 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53targets from 'aws-cdk-lib/aws-route53-targets';
 import { Construct } from 'constructs';
@@ -233,15 +235,30 @@ export class TodoInfrastructureStack extends cdk.Stack {
       distributionPaths: ['/*'],
     });
 
+    // SNS Topic for CloudWatch Alarms
+    const alarmTopic = new sns.Topic(this, 'AlarmTopic', {
+      displayName: 'Todo Application Alarms',
+      topicName: 'todo-app-alarms',
+    });
+
+    // Output SNS topic ARN for email subscription configuration
+    new cdk.CfnOutput(this, 'AlarmTopicArn', {
+      value: alarmTopic.topicArn,
+      description: 'SNS Topic ARN for alarm notifications (subscribe via email)',
+    });
+
     // CloudWatch Alarms for monitoring
     const errorAlarm = new cloudwatch.Alarm(this, 'ApiErrorAlarm', {
       metric: api.metricServerError({
         period: cdk.Duration.minutes(5),
       }),
-      threshold: 10,
-      evaluationPeriods: 2,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      threshold: 3,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOTIFYING,
+      alarmDescription: 'Alert when API server errors exceed 3 in 5 minutes',
+      alarmName: 'TodoApi-ServerErrors',
     });
+    errorAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alarmTopic));
 
     const latencyAlarm = new cloudwatch.Alarm(this, 'ApiLatencyAlarm', {
       metric: api.metricLatency({
@@ -249,19 +266,26 @@ export class TodoInfrastructureStack extends cdk.Stack {
       }),
       threshold: 2000, // 2 seconds
       evaluationPeriods: 3,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      treatMissingData: cloudwatch.TreatMissingData.NOTIFYING,
+      alarmDescription: 'Alert when API latency exceeds 2 seconds',
+      alarmName: 'TodoApi-HighLatency',
     });
+    latencyAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alarmTopic));
 
     // Lambda function error alarms
+    const functionNames = ['CreateTodo', 'GetTodos', 'GetTodo', 'UpdateTodo', 'DeleteTodo', 'HealthCheck'];
     [createTodoFunction, getTodosFunction, getTodoFunction, updateTodoFunction, deleteTodoFunction, healthCheckFunction].forEach((func, index) => {
-      new cloudwatch.Alarm(this, `Lambda${index}ErrorAlarm`, {
+      const alarm = new cloudwatch.Alarm(this, `Lambda${index}ErrorAlarm`, {
         metric: func.metricErrors({
           period: cdk.Duration.minutes(5),
         }),
-        threshold: 5,
-        evaluationPeriods: 2,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        threshold: 2,
+        evaluationPeriods: 1,
+        treatMissingData: cloudwatch.TreatMissingData.NOTIFYING,
+        alarmDescription: `Alert when ${functionNames[index]} function errors exceed 2 in 5 minutes`,
+        alarmName: `TodoLambda-${functionNames[index]}-Errors`,
       });
+      alarm.addAlarmAction(new cloudwatch_actions.SnsAction(alarmTopic));
     });
 
     // Route53 record to point custom domain to CloudFront
