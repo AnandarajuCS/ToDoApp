@@ -3,6 +3,7 @@ import { TodoService } from '../services/TodoService';
 import { Logger } from '../utils/logger';
 import {
   createSuccessResponse,
+  createUnauthorizedResponse,
   createInternalServerErrorResponse
 } from '../utils/response';
 
@@ -23,11 +24,25 @@ export const handler = async (
     path: event.path
   });
 
+  // Extract userId from Cognito authorizer claims
+  const userId = event.requestContext?.authorizer?.claims?.sub;
+  
+  if (!userId) {
+    Logger.error('User ID not found in request context', new Error('Missing user identity'), requestContext);
+    return createUnauthorizedResponse('Authentication required');
+  }
+
+  Logger.info('Authenticated user', { 
+    ...requestContext, 
+    userId 
+  });
+
   try {
-    const todos = await todoService.getAllTodos();
+    const todos = await todoService.getAllTodos(userId);
     
     Logger.info('Todos retrieved successfully', { 
       ...requestContext, 
+      userId,
       count: todos.length 
     });
     return createSuccessResponse(todos);

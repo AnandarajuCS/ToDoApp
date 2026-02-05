@@ -6,6 +6,7 @@ import { Logger } from '../utils/logger';
 import {
   createCreatedResponse,
   createBadRequestResponse,
+  createUnauthorizedResponse,
   createInternalServerErrorResponse
 } from '../utils/response';
 
@@ -27,6 +28,19 @@ export const handler = async (
   });
 
   try {
+  // Extract userId from Cognito authorizer claims
+  const userId = event.requestContext?.authorizer?.claims?.sub;
+  
+  if (!userId) {
+    Logger.error('User ID not found in request context', new Error('Missing user identity'), requestContext);
+    return createUnauthorizedResponse('Authentication required');
+  }
+
+  Logger.info('Authenticated user', { 
+    ...requestContext, 
+    userId 
+  });
+
     if (!event.body) {
       Logger.warn('Request body missing', requestContext);
       return createBadRequestResponse('Request body is required');
@@ -40,10 +54,11 @@ export const handler = async (
       return createBadRequestResponse('Invalid JSON in request body');
     }
 
-    const todo = await todoService.createTodo(request);
+    const todo = await todoService.createTodo(userId, request);
     
     Logger.info('Todo created successfully', { 
       ...requestContext, 
+      userId,
       todoId: todo.id,
       title: todo.title 
     });
