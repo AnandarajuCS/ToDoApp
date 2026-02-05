@@ -4,6 +4,8 @@ export interface TodoItem {
   completed: boolean;   // Completion status
   createdAt: string;    // ISO 8601 timestamp
   updatedAt: string;    // ISO 8601 timestamp
+  deleted: boolean;     // Soft delete flag
+  deletedAt?: string;   // ISO 8601 timestamp of deletion (optional)
 }
 
 export interface CreateTodoRequest {
