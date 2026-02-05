@@ -8,7 +8,7 @@ import {
   DeleteCommand 
 } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuidv4 } from 'uuid';
-import { TodoItem, CreateTodoRequest, UpdateTodoRequest } from '../types/TodoItem';
+import { TodoItem, CreateTodoRequest, UpdateTodoRequest, PaginatedResponse } from '../types/TodoItem';
 import { validateCreateTodoRequest, validateUpdateTodoRequest, validateTodoId } from '../utils/validation';
 
 export class TodoService {
@@ -73,19 +73,63 @@ export class TodoService {
     }
   }
 
-  async getAllTodos(): Promise<TodoItem[]> {
-    console.log('Getting all todos');
+  async getAllTodos(limit: number = 50, exclusiveStartKey?: string): Promise<PaginatedResponse<TodoItem>> {
+    console.log(`Getting todos with limit: ${limit}, startKey: ${exclusiveStartKey ? 'provided' : 'none'}`);
+    
+    // Enforce maximum limit to prevent abuse (max 100 items per request)
+    const effectiveLimit = Math.min(Math.max(limit, 1), 100);
+    
+    if (effectiveLimit !== limit) {
+      console.log(`Limit adjusted from ${limit} to ${effectiveLimit}`);
+    }
 
     try {
-      const result = await this.docClient.send(new ScanCommand({
-        TableName: this.tableName
-      }));
+      const scanParams: any = {
+        TableName: this.tableName,
+        Limit: effectiveLimit,
+        // ProjectionExpression to reduce data transfer and improve performance
+        ProjectionExpression: 'id, title, completed, createdAt, updatedAt'
+      };
+      
+      // Add pagination token if provided
+      if (exclusiveStartKey) {
+        try {
+          scanParams.ExclusiveStartKey = JSON.parse(
+            Buffer.from(exclusiveStartKey, 'base64').toString('utf-8')
+          );
+          console.log('Decoded pagination token successfully');
+        } catch (error) {
+          console.error('Invalid pagination token:', error);
+          throw new Error('Invalid pagination token');
+        }
+      }
+      
+      const result = await this.docClient.send(new ScanCommand(scanParams));
 
       const todos = (result.Items || []) as TodoItem[];
       console.log(`Retrieved ${todos.length} todos`);
       
-      // Sort by creation date, newest first
-      return todos.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      // Sort by creation date, newest first (only sorts current page)
+      const sortedTodos = todos.sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      
+      // Encode nextToken for pagination
+      const nextToken = result.LastEvaluatedKey 
+        ? Buffer.from(JSON.stringify(result.LastEvaluatedKey)).toString('base64')
+        : undefined;
+      
+      const hasMore = !!nextToken;
+      
+      console.log(`Returning ${sortedTodos.length} todos, hasMore: ${hasMore}`);
+      
+      return {
+        items: sortedTodos,
+        nextToken,
+        count: sortedTodos.length,
+        limit: effectiveLimit,
+        hasMore
+      };
     } catch (error) {
       console.error('Error getting all todos:', error);
       throw new Error('Failed to retrieve todo items');
