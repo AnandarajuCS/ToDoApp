@@ -25,7 +25,7 @@ export class TodoInfrastructureStack extends cdk.Stack {
         name: 'id',
         type: dynamodb.AttributeType.STRING,
       },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      billingMode: dynamodb.BillingMode.PROVISIONED,
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // For demo purposes
       pointInTimeRecovery: true,
